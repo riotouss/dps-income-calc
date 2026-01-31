@@ -3,76 +3,62 @@ import pdfplumber
 import pandas as pd
 import io
 import re
-from datetime import datetime
 
-st.set_page_config(page_title="Розрахунок доходу ДРФО", layout="wide")
-st.title("📄 Розрахунок доходу (Витяг з реєстру ДПС)")
+st.set_page_config(page_title="Калькулятор ДПС", layout="wide")
+st.title("📄 Розрахунок доходу з Витягу ДПС")
 
-uploaded_file = st.file_uploader("Завантажте PDF-витяг про доходи", type="pdf")
+uploaded_file = st.file_uploader("Завантажте PDF-витяг", type="pdf")
 
-def clean_amount(val):
-    """Очищення рядка з сумою та перетворення у float"""
-    if not val: return 0.0
-    cleaned = str(val).replace(" ", "").replace(",", ".").replace("\n", "")
-    try:
-        return float(cleaned)
-    except ValueError:
-        return 0.0
+def extract_amounts(text):
+    """Витягує всі числа, схожі на грошові суми (наприклад, 2 361,00 або 12.899,00)"""
+    if not text: return []
+    clean_text = text.replace("\n", " ")
+    found = re.findall(r"(\d{1,3}(?:\s?\d{3})*(?:[.,]\d{2}))", clean_text)
+    return [float(f.replace(" ", "").replace(",", ".")) for f in found]
 
 if uploaded_file is not None:
-    all_data = []
+    raw_data = []
     
     with pdfplumber.open(io.BytesIO(uploaded_file.read())) as pdf:
         for page in pdf.pages:
             table = page.extract_table()
             if table:
                 for row in table:
-                    if len(row) >= 7:
-                        year = re.search(r"20\d{2}", str(row[3]))
-                        if year:
-                            amount = clean_amount(row[5]) 
-                            if amount > 0:
-                                all_data.append({
-                                    "Рік": year.group(),
-                                    "Сума": amount
-                                })
+                    row = [cell for cell in row if cell]
+                    row_str = " ".join(row)
+                    
+                    year_match = re.search(r"\b(202\d)\b", row_str)
+                    
+                    if year_match:
+                        year = year_match.group(1)
+                        amounts = extract_amounts(row_str)
+                        
+                        if amounts:
+                            income = amounts[0]
+                            raw_data.append({"Рік": year, "Сума": income})
 
-    if all_data:
-        df = pd.DataFrame(all_data)
-        yearly_summary = df.groupby("Рік")["Сума"].sum().reset_index()
+    if raw_data:
+        df = pd.DataFrame(raw_data)
+        summary = df.groupby("Рік")["Сума"].sum().reset_index()
         
-        rows_main = []
-        total_raw_all = 0.0
-        total_net_all = 0.0
+        summary["Чистий дохід (-7%)"] = (summary["Сума"] * 0.93).round(2)
+        summary["Сума"] = summary["Сума"].round(2)
 
-        for _, row in yearly_summary.iterrows():
-            year = row["Рік"]
-            sum_val = round(row["Сума"], 2)
-            after_7 = round(sum_val * 0.93, 2)
-            
-            total_raw_all += sum_val
-            total_net_all += after_7
-            
-            rows_main.append({
-                "Рік": year,
-                "Нараховано (грн)": sum_val,
-                "Після -7% (грн)": after_7
-            })
+        st.success("✅ Дані знайдено!")
+        st.subheader("📊 Підсумок по роках")
+        st.table(summary)
 
-        st.subheader("📊 Результати розрахунку")
-        st.table(pd.DataFrame(rows_main))
+        total_all = summary["Сума"].sum()
+        total_minus_7 = summary["Чистий дохід (-7%)"].sum()
 
         col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Загальна сума (брутто)", f"{round(total_raw_all, 2)} грн")
-        with col2:
-            st.metric("Загальна сума (-7%)", f"{round(total_net_all, 2)} грн")
+        col1.metric("Загальна сума", f"{total_all:,.2f} грн")
+        col2.metric("Після вирахування 7%", f"{total_minus_7:,.2f} грн")
 
-        years_list = sorted(yearly_summary["Рік"].unique())
-        period = f"{years_list[0]}-{years_list[-1]}" if len(years_list) > 1 else years_list[0]
+        years = sorted(summary["Рік"].unique())
+        period = f"{years[0]}-{years[-1]}" if len(years) > 1 else years[0]
+        comment = f"Витяг ДРФО за період {period}; загальна сума {total_all:.2f} грн; з урахуванням 7% {total_minus_7:.2f} грн"
         
-        copy_text = f"Витяг ДРФО за період {period}; загальна сума {round(total_raw_all, 2)} грн; з урахуванням 7% {round(total_net_all, 2)} грн"
-        
-        st.text_area("📋 Коментар для копіювання:", value=copy_text, height=70)
+        st.text_area("📎 Коментар для фіксації:", value=comment)
     else:
-        st.error("❌ Не вдалося знайти дані про доходи в таблиці. Перевірте формат файлу.")
+        st.error("❌ Не вдалося розпізнати суми. Спробуйте інший формат PDF або перевірте якість файлу.")
