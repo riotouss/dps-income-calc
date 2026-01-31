@@ -10,7 +10,6 @@ st.title("📄 Розрахунок доходу з Витягу ДПС")
 uploaded_file = st.file_uploader("Завантажте PDF-витяг", type="pdf")
 
 def extract_amounts(text):
-    """Витягує всі числа, схожі на грошові суми (наприклад, 2 361,00 або 12.899,00)"""
     if not text: return []
     clean_text = text.replace("\n", " ")
     found = re.findall(r"(\d{1,3}(?:\s?\d{3})*(?:[.,]\d{2}))", clean_text)
