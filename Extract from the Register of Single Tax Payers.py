@@ -2,88 +2,83 @@ import streamlit as st
 import pdfplumber
 import pandas as pd
 import io
+import re
 
 st.set_page_config(page_title="Калькулятор ДПС", layout="wide")
 st.title("📄 Розрахунок доходу з витягу ДПС (ДРФО)")
 
-st.markdown("""
-Рахуються **всі реальні виплати**:
-- 185 — виплати військовослужбовця  
-- 128 — соціальні виплати  
-- 111 — виграші та призи  
-- 127 — інші доходи  
-
-❗ Береться **тільки колонка “Виплаченого”**
-""")
+st.markdown(
+    "Рахуються **всі виплачені доходи**:\n"
+    "- 185 — виплати військовослужбовця  \n"
+    "- 128 — соціальні виплати  \n"
+    "- 111 — виграші та призи  \n"
+    "- 127 — інші доходи  \n\n"
+    "❗ Береться **перша грошова сума в рядку** (це дохід, не податки)"
+)
 
 uploaded_file = st.file_uploader("Завантажте PDF-витяг ДПС", type="pdf")
 
 ALLOWED_CODES = ["185", "128", "111", "127"]
 
-def to_float(val):
-    if not val:
-        return 0.0
-    try:
-        return float(val.replace(" ", "").replace(",", "."))
-    except ValueError:
-        return 0.0
+CODE_NAMES = {
+    "185": "Виплати військовослужбовця",
+    "128": "Соціальні виплати",
+    "111": "Виграші та призи",
+    "127": "Інші доходи"
+}
+
+def extract_amounts(text: str):
+    """
+    Повертає всі грошові суми з рядка у форматі ДПС
+    120 557,80 -> 120557.80
+    """
+    found = re.findall(r"\d{1,3}(?: \d{3})*,\d{2}", text)
+    return [float(x.replace(" ", "").replace(",", ".")) for x in found]
+
+
+def extract_year(text: str):
+    match = re.search(r"20\d{2}", text)
+    return match.group(0) if match else "—"
+
 
 if uploaded_file:
     raw_data = []
 
     with pdfplumber.open(io.BytesIO(uploaded_file.read())) as pdf:
         for page in pdf.pages:
-            table = page.extract_table()
-            if not table:
+            text = page.extract_text()
+            if not text:
                 continue
 
-            headers = table[0]
+            lines = text.split("\n")
 
-            try:
-                idx_paid = headers.index("Виплаченого")
-                idx_code = headers.index("Код та назва ознаки доходу")
-                idx_year = headers.index("Рік")
-                idx_month = headers.index("Номер кварталу - місяць")
-            except ValueError:
-                continue
-
-            for row in table[1:]:
-                if not row or len(row) <= idx_paid:
+            for line in lines:
+                code = next((c for c in ALLOWED_CODES if c in line), None)
+                if not code:
                     continue
 
-                code_raw = row[idx_code] or ""
-                code = code_raw[:3]
-
-                if code not in ALLOWED_CODES:
+                amounts = extract_amounts(line)
+                if not amounts:
                     continue
 
-                paid = to_float(row[idx_paid])
-                if paid <= 0:
+                income = amounts[0]
+                if income <= 0:
                     continue
 
                 raw_data.append({
-                    "Рік": row[idx_year],
-                    "Місяць": row[idx_month],
+                    "Рік": extract_year(line),
                     "Код доходу": code,
-                    "Сума (виплачено)": paid
+                    "Тип доходу": CODE_NAMES.get(code, code),
+                    "Сума (виплачено)": income
                 })
 
     if not raw_data:
-        st.error("❌ Не вдалося розпізнати виплачені доходи. Перевірте формат PDF.")
+        st.error("❌ Не вдалося розпізнати доходи. Це нетиповий PDF або скан.")
         st.stop()
 
     df = pd.DataFrame(raw_data)
 
-    code_names = {
-        "185": "Виплати військовослужбовця",
-        "128": "Соціальні виплати",
-        "111": "Виграші та призи",
-        "127": "Інші доходи"
-    }
-
-    df["Тип доходу"] = df["Код доходу"].map(code_names)
-
-    st.success("✅ Дані успішно оброблено")
+    st.success("✅ Дані успішно зчитані")
 
     st.subheader("📋 Деталізація")
     st.dataframe(df, use_container_width=True)
