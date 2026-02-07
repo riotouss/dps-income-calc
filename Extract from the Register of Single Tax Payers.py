@@ -36,7 +36,8 @@ if uploaded_file:
                 
                 if year_match:
                     year = year_match.group(1)
-                     
+                    
+        
                     vyp_amount = 0.0
                     
                     if len(row) >= 8:
@@ -47,7 +48,7 @@ if uploaded_file:
                     elif len(row) >= 6:
                         vyp_amount = clean_value(row[5])
 
-                    if vyp_amount > 0 and vyp_amount < 1000000:
+                    if vyp_amount > 0 and vyp_amount < 1000000: 
                         raw_data.append({"Рік": year, "Виплачено": vyp_amount})
 
     if raw_data:
@@ -75,7 +76,7 @@ if uploaded_file:
         period = f"{summary['Рік'].iloc[0]}-{summary['Рік'].iloc[-1]}"
         comment = f"Витяг ДРФО; період {period}; сума виплаченого доходу {total_vyp:.2f} грн; з урахуванням 7% {total_net:.2f} грн"
         
-st.markdown("📎 **Коментар:**")
+        st.markdown("📎 **Коментар:**")
         components.html(f"""
             <div style="background:#1e1e1e; color:white; padding:15px; border-radius:10px; font-family:sans-serif;">
                 <div id="c">{comment}</div>
