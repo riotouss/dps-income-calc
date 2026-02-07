@@ -75,6 +75,21 @@ if uploaded_file:
         period = f"{summary['Рік'].iloc[0]}-{summary['Рік'].iloc[-1]}"
         comment = f"Витяг ДРФО; період {period}; сума виплаченого доходу {total_vyp:.2f} грн; з урахуванням 7% {total_net:.2f} грн"
         
-        st.markdown("📎 **Коментар:**")
+st.markdown("📎 **Коментар:**")
         components.html(f"""
-            <div style="background:#1e1e1e; color:white; padding:1
+            <div style="background:#1e1e1e; color:white; padding:15px; border-radius:10px; font-family:sans-serif;">
+                <div id="c">{comment}</div>
+                <button onclick="copy()" style="margin-top:10px; background:#4CAF50; color:white; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">
+                    📋 Скопіювати
+                </button>
+            </div>
+            <script>
+                function copy() {{
+                    const t = document.getElementById('c').innerText;
+                    navigator.clipboard.writeText(t);
+                    alert('Скопійовано!');
+                }}
+            </script>
+        """, height=150)
+    else:
+        st.error("❌ Не вдалося знайти суми виплат. Перевірте формат таблиці.")
