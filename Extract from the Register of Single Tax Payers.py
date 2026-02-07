@@ -13,8 +13,7 @@ uploaded_file = st.file_uploader("Завантажте PDF-витяг", type="pd
 def get_vyp_from_row(row_cells):
     """
     Знаходить усі грошові суми. 
-    За логікою ДПС: спочатку Нараховано, потім Виплачено.
-    Ми беремо Виплачено (зазвичай це 2-ге число у блоці доходів).
+    Беремо ВИПЛАЧЕНО (зазвичай це 2-ге число у блоці доходів або єдине велике число).
     """
     row_text = " ".join([str(c) for c in row_cells if c])
     amounts = re.findall(r"\d{1,3}(?:[\s\.]?\d{3})*[.,]\d{2}", row_text)
@@ -48,25 +47,33 @@ if uploaded_file:
 
     if data:
         df = pd.DataFrame(data)
+        df["Рік"] = df["Рік"].astype(str)
+        
         res = df.groupby("Рік")["Виплачено"].sum().reset_index()
         res["-7%"] = (res["Виплачено"] * 0.93).round(2)
         
-        st.table(res.style.format("{:.2f}"))
+        st.success("✅ Дані успішно оброблено")
+        
+        display_df = res.copy()
+        display_df["Виплачено"] = display_df["Виплачено"].map("{:,.2f}".format)
+        display_df["-7%"] = display_df["-7%"].map("{:,.2f}".format)
+        
+        st.subheader("📊 Підсумок по роках")
+        st.table(display_df)
         
         total = res["Виплачено"].sum()
         total_7 = res["-7%"].sum()
         
-        st.metric("Загалом виплачено", f"{total:,.2f} грн")
-        st.metric("Сума після -7%", f"{total_7:,.2f} грн")
+        col1, col2 = st.columns(2)
+        col1.metric("Загалом виплачено", f"{total:,.2f} грн")
+        col2.metric("Сума після -7%", f"{total_7:,.2f} грн")
         
         comment = f"Витяг ДРФО; період {res['Рік'].iloc[0]}-{res['Рік'].iloc[-1]}; сума {total:.2f} грн; з урахуванням 7% {total_7:.2f} грн"
+        
+        st.markdown("📎 **Коментар для копіювання:**")
         components.html(f"""
-            <div style="background:#1e1e1e; color:white; padding:10px; border-radius:8px; font-family:sans-serif;">
-                <div id="c">{comment}</div>
-                <button onclick="navigator.clipboard.writeText(document.getElementById('c').innerText); alert('OK')" 
-                style="margin-top:10px; background:#4CAF50; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">
-                Скопіювати</button>
-            </div>
-        """, height=120)
-    else:
-        st.error("Дані не знайдено")
+            <div style="background:#1e1e1e; color:white; padding:15px; border-radius:10px; font-family:sans-serif;">
+                <div id="c" style="margin-bottom:10px; line-height:1.4;">{comment}</div>
+                <button onclick="copyToClipboard()" style="background:#4CAF50; color:white; border:none; padding:8px 16px; border-radius:5px; cursor:pointer; font-weight:bold;">
+                    📋 Скопіювати
+                </
