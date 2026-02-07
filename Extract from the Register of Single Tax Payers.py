@@ -6,8 +6,7 @@ import io
 st.set_page_config(page_title="Калькулятор ДПС", layout="wide")
 st.title("📄 Розрахунок доходу з витягу ДПС (ДРФО)")
 
-st.markdown("""
-
+st.markdown(
 uploaded_file = st.file_uploader("Завантажте PDF-витяг ДПС", type="pdf")
 
 ALLOWED_CODES = ["185", "128", "111", "127"]
